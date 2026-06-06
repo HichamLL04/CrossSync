@@ -16,6 +16,8 @@ class LLMClient:
             try:
                 res = requests.post(url, json=json_data, headers=headers)
                 if res.status_code == 429 or res.status_code >= 500:
+                    if attempt == max_retries - 1:
+                        res.raise_for_status()
                     wait_time = (2 ** attempt) + 1
                     print(f"Warning: API returned status {res.status_code}. Retrying in {wait_time}s (attempt {attempt+1}/{max_retries})...")
                     time.sleep(wait_time)

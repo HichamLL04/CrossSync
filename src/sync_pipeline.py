@@ -1,10 +1,46 @@
 import pysrt
 import numpy as np
 import unicodedata
+import re
 from src.cleaner import clean_text
 from src.aligner import SemanticAligner, align_sequences
 from src.decision_engine import parse_dtw_path
 from src.llm_client import LLMClient
+
+def preserve_formatting(part_text: str, original_raw_text: str) -> str:
+    if not part_text.strip():
+        return ""
+    
+    pos_tag = ""
+    pos_match = re.search(r"\{\\an\d\}", original_raw_text)
+    if pos_match:
+        pos_tag = pos_match.group(0)
+        
+    opening_tags = []
+    temp = original_raw_text.replace(pos_tag, "").strip()
+    while True:
+        m = re.match(r"^<[^>]+>", temp)
+        if m:
+            tag = m.group(0)
+            opening_tags.append(tag)
+            temp = temp[len(tag):].strip()
+        else:
+            break
+            
+    closing_tags = []
+    temp = original_raw_text.replace(pos_tag, "").strip()
+    while True:
+        m = re.search(r"</[^>]+>$", temp)
+        if m:
+            tag = m.group(0)
+            closing_tags.insert(0, tag)
+            temp = temp[:-len(tag)].strip()
+        else:
+            break
+            
+    prefix = "".join(opening_tags)
+    suffix = "".join(closing_tags)
+    return f"{pos_tag}{prefix}{part_text}{suffix}"
 
 def validate_and_clean_parts(parts: list[str], original_text: str) -> list[str]:
     def normalize_word(word: str) -> str:
@@ -60,7 +96,7 @@ class SubSyncPipeline:
 
             if gtype == "keep":
                 # Copy text from A, timing from B
-                orig_text = clean_a[src_idx[0]]
+                orig_text = subs_a[src_idx[0]].text
                 ref_sub = subs_b[tgt_idx[0]]
                 synced_subs.append(pysrt.SubRipItem(
                     index=item_counter,
@@ -72,18 +108,28 @@ class SubSyncPipeline:
 
             elif gtype == "join":
                 # Merge multiple A items into one B item time slot
-                texts_a = [clean_a[i] for i in src_idx]
+                raw_texts_a = [subs_a[i].text for i in src_idx]
+                clean_texts_a = [clean_a[i] for i in src_idx]
                 
-                if self.llm_client and len(texts_a) > 1:
+                if self.llm_client and len(clean_texts_a) > 1:
                     try:
                         ref_b = " ".join(clean_b[i] for i in tgt_idx)
-                        filtered_texts = self.llm_client.filter_join(texts_a, ref_b)
-                        merged_text = " ".join(filtered_texts)
+                        filtered_clean = self.llm_client.filter_join(clean_texts_a, ref_b)
+                        
+                        # Match filtered clean texts back to raw texts
+                        filtered_raw = []
+                        for clean_txt in filtered_clean:
+                            if clean_txt in clean_texts_a:
+                                idx = clean_texts_a.index(clean_txt)
+                                filtered_raw.append(raw_texts_a[idx])
+                                clean_texts_a[idx] = None
+                        
+                        merged_text = " ".join(filtered_raw)
                     except Exception as e:
                         print(f"Warning: LLM join filtering failed: {e}. Keeping all parts.")
-                        merged_text = " ".join(texts_a)
+                        merged_text = " ".join(raw_texts_a)
                 else:
-                    merged_text = " ".join(texts_a)
+                    merged_text = " ".join(raw_texts_a)
 
                 # If many target slots, span start of first to end of last
                 start_time = subs_b[tgt_idx[0]].start
@@ -145,13 +191,15 @@ class SubSyncPipeline:
                     if len(words) > chunk_size * num_parts:
                         parts[-1] += " " + " ".join(words[chunk_size * num_parts:])
 
+                original_raw = subs_a[src_idx[0]].text
                 for idx, b_idx in enumerate(tgt_idx):
                     ref_sub = subs_b[b_idx]
+                    part_text = preserve_formatting(parts[idx], original_raw)
                     synced_subs.append(pysrt.SubRipItem(
                         index=item_counter,
                         start=ref_sub.start,
                         end=ref_sub.end,
-                        text=parts[idx]
+                        text=part_text
                       ))
                     item_counter += 1
 
