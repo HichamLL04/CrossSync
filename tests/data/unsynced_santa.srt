@@ -1,0 +1,19 @@
+1
+00:00:03,100 --> 00:00:06,450
+<font face="Humana Sans Md ITC TT" size="46" color="#f0e5e3"><b>Preguntarle a alguien hasta cuándo creyó en Santa Claus</b></font>
+
+2
+00:00:06,660 --> 00:00:10,330
+<font face="Humana Sans Md ITC TT" size="46" color="#f0e5e3"><b>es tan insignificante como un rumor sin fundamento.</b></font>
+
+3
+00:00:10,640 --> 00:00:15,700
+<font face="Humana Sans Md ITC TT" size="46" color="#f0e5e3"><b>{\an8}A pesar de ello, si vais a preguntarme cuántos años de mi infancia me pasé creyendo en ese viejo señor de traje rojo,</b></font>
+
+4
+00:00:15,780 --> 00:00:17,270
+<font face="Humana Sans Md ITC TT" size="46" color="#f0e5e3"><b>ya os digo de antemano</b></font>
+
+5
+00:00:17,270 --> 00:00:19,410
+<font face="Humana Sans Md ITC TT" size="46" color="#f0e5e3"><b>que nunca creí en él desde un principio.</b></font>
