@@ -149,3 +149,100 @@ Responde con el JSON correspondiente al texto original A y las referencias de B 
             if len(lines) == num_parts:
                 return lines
             raise ValueError(f"Failed to parse LLM content as JSON: {content}") from e
+
+    def filter_join(self, texts_a: list[str], reference_b: str) -> list[str]:
+        if not texts_a:
+            return []
+        if len(texts_a) == 1:
+            return texts_a
+
+        formatted_texts_a = "\n".join(f"{i}: \"{txt}\"" for i, txt in enumerate(texts_a))
+        
+        prompt = f"""Eres un experto en traducción y sincronización de subtítulos.
+Tienes una lista de fragmentos de subtítulos en español (A) que se han agrupado para coincidir con una única referencia en inglés (B).
+Tu tarea es identificar cuáles de estos fragmentos en español son la traducción o parte de la traducción de la referencia en inglés B.
+Si alguno de los fragmentos en español no tiene relación semántica alguna con B (por ejemplo, es un texto extra que no existe en la referencia), debes descartarlo.
+
+Fragmentos en español (A):
+{formatted_texts_a}
+
+Referencia en inglés (B):
+"{reference_b}"
+
+Responde únicamente con un JSON que contenga un objeto con la clave "indices_validos", cuyo valor sea una lista con los índices (0-indexed) de los fragmentos en español que debes MANTENER (dejar en su orden original).
+
+Ejemplos de respuesta:
+
+Ejemplo 1:
+Fragmentos en español (A):
+0: "Y así nos conocimos."
+1: "Entrada gratuita"
+Referencia en inglés (B): "And so we met."
+Respuesta:
+{{
+  "indices_validos": [0]
+}}
+
+Ejemplo 2:
+Fragmentos en español (A):
+0: "Deseaba de todo corazón"
+1: "que todo fuese una mera coincidencia."
+Referencia en inglés (B): "I deeply hope that I can believe it was mere coincidence."
+Respuesta:
+{{
+  "indices_validos": [0, 1]
+}}
+"""
+
+        if self.provider == "ollama":
+            payload = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "options": {"temperature": 0.0},
+                "format": "json",
+                "stream": False
+            }
+            headers = {"Content-Type": "application/json"}
+            res = self._post_with_retry(f"{self.url}/api/chat", json_data=payload, headers=headers)
+            content = res.json()["message"]["content"]
+        
+        elif self.provider == "gemini":
+            headers = {"Content-Type": "application/json"}
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "temperature": 0.0,
+                    "responseMimeType": "application/json"
+                }
+            }
+            res = self._post_with_retry(url, json_data=payload, headers=headers)
+            content = res.json()["candidates"][0]["content"]["parts"][0]["text"]
+
+        elif self.provider == "openai":
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}"
+            }
+            payload = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.0,
+                "response_format": {"type": "json_object"}
+            }
+            res = self._post_with_retry("https://api.openai.com/v1/chat/completions", json_data=payload, headers=headers)
+            content = res.json()["choices"][0]["message"]["content"]
+
+        else:
+            raise ValueError(f"Unknown provider: {self.provider}")
+
+        try:
+            data = json.loads(content)
+            indices = data.get("indices_validos", [])
+            valid_texts = []
+            for idx in sorted(indices):
+                if 0 <= idx < len(texts_a):
+                    valid_texts.append(texts_a[idx])
+            return valid_texts if valid_texts else texts_a
+        except Exception:
+            return texts_a

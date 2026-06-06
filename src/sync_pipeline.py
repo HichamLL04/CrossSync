@@ -72,7 +72,19 @@ class SubSyncPipeline:
 
             elif gtype == "join":
                 # Merge multiple A items into one B item time slot
-                merged_text = " ".join(clean_a[i] for i in src_idx)
+                texts_a = [clean_a[i] for i in src_idx]
+                
+                if self.llm_client and len(texts_a) > 1:
+                    try:
+                        ref_b = " ".join(clean_b[i] for i in tgt_idx)
+                        filtered_texts = self.llm_client.filter_join(texts_a, ref_b)
+                        merged_text = " ".join(filtered_texts)
+                    except Exception as e:
+                        print(f"Warning: LLM join filtering failed: {e}. Keeping all parts.")
+                        merged_text = " ".join(texts_a)
+                else:
+                    merged_text = " ".join(texts_a)
+
                 # If many target slots, span start of first to end of last
                 start_time = subs_b[tgt_idx[0]].start
                 end_time = subs_b[tgt_idx[-1]].end
