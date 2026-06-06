@@ -9,6 +9,26 @@ class LLMClient:
         self.api_key = api_key
         self.url = url or "http://localhost:11434"
 
+    def _post_with_retry(self, url: str, json_data: dict, headers: dict) -> requests.Response:
+        import time
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                res = requests.post(url, json=json_data, headers=headers)
+                if res.status_code == 429 or res.status_code >= 500:
+                    wait_time = (2 ** attempt) + 1
+                    print(f"Warning: API returned status {res.status_code}. Retrying in {wait_time}s (attempt {attempt+1}/{max_retries})...")
+                    time.sleep(wait_time)
+                    continue
+                res.raise_for_status()
+                return res
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    raise e
+                wait_time = (2 ** attempt) + 1
+                print(f"Warning: Connection error {e}. Retrying in {wait_time}s (attempt {attempt+1}/{max_retries})...")
+                time.sleep(wait_time)
+
     def split_line(self, text: str, num_parts: int, references: list[str]) -> list[str]:
         refs_formatted = "\n".join(f"- Parte {i+1} de referencia: \"{ref}\"" for i, ref in enumerate(references))
         
@@ -69,8 +89,7 @@ Responde con el JSON correspondiente al texto original A y las referencias de B 
                 "stream": False
             }
             headers = {"Content-Type": "application/json"}
-            res = requests.post(f"{self.url}/api/chat", json=payload, headers=headers)
-            res.raise_for_status()
+            res = self._post_with_retry(f"{self.url}/api/chat", json_data=payload, headers=headers)
             content = res.json()["message"]["content"]
         
         elif self.provider == "gemini":
@@ -83,8 +102,7 @@ Responde con el JSON correspondiente al texto original A y las referencias de B 
                     "responseMimeType": "application/json"
                 }
             }
-            res = requests.post(url, json=payload, headers=headers)
-            res.raise_for_status()
+            res = self._post_with_retry(url, json_data=payload, headers=headers)
             content = res.json()["candidates"][0]["content"]["parts"][0]["text"]
 
         elif self.provider == "openai":
@@ -98,8 +116,7 @@ Responde con el JSON correspondiente al texto original A y las referencias de B 
                 "temperature": 0.0,
                 "response_format": {"type": "json_object"}
             }
-            res = requests.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers)
-            res.raise_for_status()
+            res = self._post_with_retry("https://api.openai.com/v1/chat/completions", json_data=payload, headers=headers)
             content = res.json()["choices"][0]["message"]["content"]
 
         else:
