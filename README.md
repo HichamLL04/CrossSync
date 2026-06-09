@@ -2,8 +2,15 @@
 
 CrossSync is a tool designed to synchronize out-of-sync subtitles (e.g., in Spanish) using a correctly synchronized reference subtitle in another language (e.g., English). It utilizes multilingual sentence embeddings to calculate semantic alignment across different languages and optional LLMs (Ollama/Gemini) to handle complex splits.
 
+<p align="center">
+  <img src="docs/screenshot.png" alt="CrossSync GUI" width="650">
+</p>
+
 ## 🚀 Features
 
+* **Graphical & Command-Line Interfaces**: Run the application with no arguments to launch the custom dark-theme GUI, or use command-line parameters for script integrations.
+* **Integrated API & Connection Testers**: Configure and test local Ollama endpoints or remote Gemini/OpenAI API credentials directly within the interface before running a job.
+* **Standalone Desktop Executable**: Compiles into self-contained portable folders for Linux and Windows using a single build script.
 * **Multilingual Semantic Alignment**: Uses `SentenceTransformers` (`paraphrase-multilingual-MiniLM-L12-v2`) to align subtitle text semantically, regardless of the language.
 * **Dynamic Time Warping (DTW)**: Sequentially aligns the source and target subtitle blocks.
 * **Semantic Dominant Match**: Automatically detects when a dialogue line matches a single target slot among a group containing unrelated elements (like on-screen text, signs, timestamps, or songs), leaving the extra elements empty.
@@ -31,6 +38,13 @@ CrossSync is a tool designed to synchronize out-of-sync subtitles (e.g., in Span
    ```
 
 ## ⚙️ Usage
+
+### Graphical User Interface (GUI)
+Simply run the sync script without arguments (or with the `--gui` flag) to launch the custom graphical interface:
+```bash
+python sync.py
+```
+*You can drag and drop your `.srt` files or folder paths directly onto the GUI input fields, configure LLM endpoints, and test your connection before running the synchronizer.*
 
 ### Basic Sychronization (Embeddings only)
 To synchronize subtitles using only semantic embedding alignment (falls back to proportional split for multi-line divisions):
@@ -71,6 +85,13 @@ PYTHONPATH=. python sync.py \
 * `--llm-model`: The name of the model to use (e.g., `qwen2.5:3b`, `gemini-2.5-flash`).
 * `--ollama-url`: The Ollama API URL (default: `http://localhost:11434`).
 * `--api-key`: Clave API (for Gemini/OpenAI).
+
+## 📦 Building Standalone Executable
+You can package CrossSync into a native, standalone executable directory (Linux or Windows) using the wrapper script:
+```bash
+python build.py
+```
+This command automatically installs packaging dependencies (PyInstaller/PyQt6) and compiles the codebase into `dist/SubSync/`. To run it, run the `SubSync` binary inside that folder.
 
 ## 📓 Google Colab
 You can run CrossSync in the cloud using the included notebook:

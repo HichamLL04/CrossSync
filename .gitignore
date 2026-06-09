@@ -30,3 +30,12 @@ env/
 tests/data/output_santa.srt
 *_synced.srt
 *_synced_ollama.srt
+
+# PyInstaller / Executable build artifacts
+build/
+dist/
+*.spec
+
+# Local configurations (contains API keys)
+config.json
+

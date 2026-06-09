@@ -248,3 +248,43 @@ Respuesta:
             return valid_texts if valid_texts else texts_a
         except Exception:
             return texts_a
+
+    def test_connection(self) -> str:
+        prompt = "Reply with exactly the word 'OK'."
+        if self.provider == "ollama":
+            payload = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "options": {"temperature": 0.0},
+                "stream": False
+            }
+            res = requests.post(f"{self.url}/api/chat", json=payload, timeout=8)
+            res.raise_for_status()
+            return res.json()["message"]["content"].strip()
+        elif self.provider == "gemini":
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "temperature": 0.0
+                }
+            }
+            res = requests.post(url, json=payload, timeout=8)
+            res.raise_for_status()
+            return res.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+        elif self.provider == "openai":
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}"
+            }
+            payload = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.0
+            }
+            res = requests.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers, timeout=8)
+            res.raise_for_status()
+            return res.json()["choices"][0]["message"]["content"].strip()
+        else:
+            raise ValueError(f"Unknown provider: {self.provider}")
+

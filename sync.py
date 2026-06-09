@@ -1,12 +1,34 @@
 #!/usr/bin/env python3
 import os
+import sys
 import argparse
+import re
 from src.aligner import SemanticAligner
 from src.llm_client import LLMClient
 from src.sync_pipeline import SubSyncPipeline
 
 def parse_id(filename: str) -> str:
     base = os.path.basename(filename)
+    
+    # Remove all bracketed tags first! e.g., "[BD 1080p FLAC]", "[55CE8766]", "[TV-720P]"
+    cleaned_base = re.sub(r"\[[^\]]+\]", "", base)
+    
+    # Also remove common video resolutions, codecs, bits: "1080p", "720p", "480p", "10bit", "8bit", "x264", "x265", "h264", "h265", "hevc"
+    cleaned_base = re.sub(r"\b\d{3,4}p\b", "", cleaned_base, flags=re.IGNORECASE)
+    cleaned_base = re.sub(r"\b\d+bit\b", "", cleaned_base, flags=re.IGNORECASE)
+    cleaned_base = re.sub(r"\b(?:[xh]\.?26[45]|hevc|av1)\b", "", cleaned_base, flags=re.IGNORECASE)
+    cleaned_base = re.sub(r"\b20\d{2}\b", "", cleaned_base) # Year
+    
+    # 1. Matches E01, EP01, EP_01, EP-01, Episode 01, Episode-01, Capitulo 01, etc.
+    match_ep = re.search(r"\b(?:ep|e|episode|cap|capitulo|capítulo)\s*[_\-]?\s*(\d+)\b", cleaned_base, re.IGNORECASE)
+    if match_ep:
+        return f"{int(match_ep.group(1)):02d}"
+        
+    # 2. Search for the first isolated 2-digit or 3-digit number in the remaining text
+    match_num = re.search(r"\b(\d{2,3})\b", cleaned_base)
+    if match_num:
+        return f"{int(match_num.group(1)):02d}"
+        
     if '-' in base:
         return base.split('-', 1)[0].strip()
     return ""
@@ -41,7 +63,28 @@ def main():
     # Embedding Args
     parser.add_argument("--embedding-model", default="paraphrase-multilingual-MiniLM-L12-v2", help="Modelo de embeddings.")
 
+    # GUI Mode Flag
+    parser.add_argument("--gui", action="store_true", help="Forzar el inicio en modo interfaz gráfica (GUI).")
+
     args = parser.parse_args()
+
+    # Determine if we should start the GUI.
+    # We start GUI if --gui is passed, or if NO args are passed at all.
+    has_cli_args = any([
+        args.unsynced, args.synced, args.output,
+        args.unsynced_dir, args.synced_dir, args.output_dir
+    ])
+    
+    if args.gui or not has_cli_args:
+        try:
+            from src.gui import start_gui
+            start_gui()
+            return
+        except ImportError as e:
+            print(f"Error al iniciar la GUI: {e}")
+            print("Asegúrate de tener PyQt6 instalado o ejecuta en modo CLI con los argumentos correspondientes.")
+            parser.print_help()
+            sys.exit(1)
 
     # Load API Key from environment if not provided
     api_key = args.api_key or os.getenv("LLM_API_KEY")
